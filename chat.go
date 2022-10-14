@@ -48,16 +48,18 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-func handleStream(s network.Stream) {
-	log.Println("Got a new stream!")
+func makeStramHandler(username *string) network.StreamHandler {
+	return func(s network.Stream) {
+		log.Println("Got a new stream!")
 
-	// Create a buffer stream for non blocking read and write.
-	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
+		// Create a buffer stream for non blocking read and write.
+		rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
 
-	go readData(rw)
-	go writeData(rw)
+		go readData(rw)
+		go writeData(rw, username)
 
-	// stream 's' will stay open until you close it (or the other side closes it).
+		// stream 's' will stay open until you close it (or the other side closes it).
+	}
 }
 
 func readData(rw *bufio.ReadWriter) {
@@ -76,7 +78,7 @@ func readData(rw *bufio.ReadWriter) {
 	}
 }
 
-func writeData(rw *bufio.ReadWriter) {
+func writeData(rw *bufio.ReadWriter, username *string) {
 	stdReader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -87,7 +89,7 @@ func writeData(rw *bufio.ReadWriter) {
 			return
 		}
 
-		rw.WriteString(fmt.Sprintf("%s\n", sendData))
+		rw.WriteString(fmt.Sprintf("(%s) %s\n", *username, sendData))
 		rw.Flush()
 	}
 }
@@ -98,6 +100,7 @@ func main() {
 
 	sourcePort := flag.Int("sp", 0, "Source port number")
 	dest := flag.String("d", "", "Destination multiaddr string")
+	username := flag.String("u", "", "User name")
 	help := flag.Bool("help", false, "Display help")
 	debug := flag.Bool("debug", false, "Debug generates the same node ID on every execution")
 
@@ -130,7 +133,7 @@ func main() {
 	}
 
 	if *dest == "" {
-		startPeer(ctx, h, handleStream)
+		startPeer(ctx, h, makeStramHandler(username))
 	} else {
 		rw, err := startPeerAndConnect(ctx, h, *dest)
 		if err != nil {
@@ -139,7 +142,7 @@ func main() {
 		}
 
 		// Create a thread to read and write data.
-		go writeData(rw)
+		go writeData(rw, username)
 		go readData(rw)
 
 	}
